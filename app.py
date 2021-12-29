@@ -20,10 +20,12 @@ from bokeh.transform import factor_cmap
 from bokeh.palettes import Blues8
 from bokeh.embed import components
 
+import streamlit as st
+
 dotenv_config = {
     **os.environ,  # override loaded values with environment variables
 }
-    #**dotenv.dotenv_values(".env"),  # load shared development variables
+    ##**dotenv.dotenv_values(".env"),  # load shared development variables
 print(dotenv_config)
 key=dotenv_config['ALPHA_VANTAGE_API_KEY']
 
@@ -36,6 +38,7 @@ options=''
 function='TIME_SERIES_DAILY'
 sample_date='2021-12-24'
 
+@st.cache
 def get_data():
     #url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={}&apikey={}'.format(ticker, key)
     url = 'https://www.alphavantage.co/query?function={}&symbol={}&interval=5min&{}apikey={}'.format(function,ticker,options,key)
@@ -147,4 +150,8 @@ p.legend.border_line_alpha = 0.1
 p.legend.background_fill_color = "white"
 p.legend.background_fill_alpha = 0.05
 
-save(p)
+
+st.title("tzcrawford dataincubator milestone project")
+
+#save(p)
+st.bokeh_chart(p)
