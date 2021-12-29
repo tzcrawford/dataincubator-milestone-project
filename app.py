@@ -23,9 +23,9 @@ from bokeh.embed import components
 import streamlit as st
 
 dotenv_config = {
+    **dotenv.dotenv_values(".env"),  # load shared development variables
     **os.environ,  # override loaded values with environment variables
 }
-    ##**dotenv.dotenv_values(".env"),  # load shared development variables
 print(dotenv_config)
 key=dotenv_config['ALPHA_VANTAGE_API_KEY']
 
@@ -38,7 +38,7 @@ options=''
 function='TIME_SERIES_DAILY'
 sample_date='2021-12-24'
 
-@st.cache
+@st.cache(allow_output_mutation=True)
 def get_data():
     #url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={}&apikey={}'.format(ticker, key)
     url = 'https://www.alphavantage.co/query?function={}&symbol={}&interval=5min&{}apikey={}'.format(function,ticker,options,key)
