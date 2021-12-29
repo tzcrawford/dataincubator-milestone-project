@@ -3,76 +3,148 @@ import numpy as np
 import pandas as pd
 # disable chained assignments
 pd.options.mode.chained_assignment = None
-import geopandas as gpd
-import streamlit as st
-import plotly.express as px
-from zipfile import ZipFile
+import os
 import requests
+from zipfile import ZipFile
 from io import BytesIO
+import dotenv
 import json
+from datetime import datetime, timedelta
 
-key = 'XXX'
-ticker = 'AAPL'
+import plotly.express as px
+from bokeh.plotting import figure, output_file, show, save, ColumnDataSource
+from bokeh.models import Range1d
+from bokeh.models.tools import HoverTool
+from bokeh.models.formatters import DatetimeTickFormatter
+from bokeh.transform import factor_cmap
+from bokeh.palettes import Blues8
+from bokeh.embed import components
 
-@st.cache
+dotenv_config = {
+    **os.environ,  # override loaded values with environment variables
+}
+    #**dotenv.dotenv_values(".env"),  # load shared development variables
+print(dotenv_config)
+key=dotenv_config['ALPHA_VANTAGE_API_KEY']
+
+ticker = 'IBM'
+#ticker = 'SHOP.TRT'
+#options='adjusted=true&'
+options=''
+#function='TIME_SERIES_INTRADAY'
+#function='TIME_SERIES_MONTHLY_ADJUSTED'
+function='TIME_SERIES_DAILY'
+sample_date='2021-12-24'
+
 def get_data():
-    url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={}&apikey={}'.format(ticker, key)
+    #url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol={}&apikey={}'.format(ticker, key)
+    url = 'https://www.alphavantage.co/query?function={}&symbol={}&interval=5min&{}apikey={}'.format(function,ticker,options,key)
     req = requests.get(url)
-    print(response.json())
-    #content=ZipFile(BytesIO(req.content))
-    #df=pd.read_csv(content.open("geochem.csv"))
-    #df=pd.read_csv(content.open("geochem.csv"))[['LABNO','CATEGORY','DATASET','TYPEDESC','ICP40_JOB','AS_ICP40','AS_AA','LATITUDE','LONGITUDE']]
-    #df=gpd.read_file(content.open('ngs.shp'))
-    df=gpd.read_file(BytesIO(req.content))
-    #,rows=100)[['LABNO','CATEGORY','DATASET','TYPEDESC','COUNT','ICP40_JOB','AS_ICP40','AS_AA','geometry']]
+    #print(req.json())
+    df=pd.read_json(req.content)
+    return df
+
+def symbol_search(keyword): #search for available ticker symbols
+    url = 'https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords={}&apikey={}'.format(keyword,key)
+    req = requests.get(url)
+    #print(req.json())
+    df=pd.read_json(req.content)
     return df
 
 df = get_data()
+#df.drop(df.index[range(0,4)],inplace=True) #delete header lines
+df.drop(df.index[range(0,5)],inplace=True) #delete header lines
+#print(df)
+print(df.index) #to see available dates (one per month)
+#print('------')
+#print(df.loc[sample_date][1]) #to see the types of values for each date
+#print(df.loc[sample_date][1]['4. close']) #closing price for one date
+#print('------')
+#print(df['Time Series (Daily)'])
+#print('------')
+df["closing"]=df['Time Series (Daily)'].map(
+                    lambda x: str(x['4. close'])
+                    ) #the values need to be string not float otherwise bokeh mad about y_range
+df['date']=df.index.map(
+                    lambda x: datetime.strptime(x,'%Y-%m-%d')
+                    ) #need to convert the index which contains the date as a string to a usable object to plot. Creating a duplicate column is not maybe the most optimized but whatever
 
-st.title("Streamlit 101: An in-depth introduction")
-st.markdown("This is a Subtitle!")
+#df.reset_index(inplace=True)
 
-#st.code("""
-#def square(x):
-#    return x**2
-#""", language="python")
+#print(df['closing'])
 
-st.markdown("**Columns are:**\n"+str(df.columns.values))
-#df=df[['REC_NO','LABNO','COLL_DATE','CATEGORY','DATASET','TYPEDESC','ICP40_JOB','AS_ICP40','AS_AA','LATITUDE','LONGITUDE']]
-df=df[['LABNO','CATEGORY','DATASET','TYPEDESC','ICP40_JOB','AS_ICP40','AS_AA','geometry']]
-#df.rename(columns={'LATITUDE': 'lat', 'LONGITUDE': 'lon'}, inplace=True)
-#df.set_index('REC_NO')
-df.set_index('geometry')
-st.markdown(df.shape[0])
-df.drop(range(1000,len(df)),inplace=True)
-st.markdown(df.shape[0])
+print('------')
+source = ColumnDataSource(df)
+#print(source.data['closing'])
+#print(source.data['date'])
+#print(source.data)
+#print('------')
 
-#st.header("Head of Raw Data")
-#st.dataframe(df.head()) #err for some reason
+output_file('index.html')
 
-def web_mercator(df, lon="lon", lat="lat"):
-    #Convert decimal lon/lat to Web Mercator format
-    k=6378137
-    df["x"]=df[lon]*k*np.pi/180.0
-    df["y"]=np.log( np.tan( (90 + df[lat]) * np.pi / 360 ) ) * k 
-    return df
-df['lon']=df['geometry'].map(
-        lambda x: float(str(x).strip("POINT (").replace(" ",",").strip(")").split(",")[0])
-        )   
-df['lat']=df['geometry'].map(
-        lambda x: float(str(x).strip("POINT (").replace(" ",",").strip(")").split(",")[1])
+p = figure(
+    plot_width=800,
+    plot_height=600,
+    title='Daily Non-Adjusted Closing Price',
+    x_axis_label='Date',
+    x_axis_type="datetime",
+    y_axis_label='Closing Price',
+    tools="pan,box_select,zoom_in,zoom_out,save,reset",
+)
+    #y_range=source.data['closing'].tolist(),
+    #x_range=source.data['index'].tolist(),
+    #y_range=Range1d(1700,2000),
+    #x_range=Range1d(0,100),
+
+p.xaxis.formatter=DatetimeTickFormatter(months='%b %Y')
+
+p.toolbar.logo = None
+p.toolbar_location = None
+p.toolbar.active_drag = None
+p.toolbar.active_scroll = None
+p.toolbar.active_tap = None
+
+p.border_fill_color = 'black'
+p.background_fill_color = 'black'
+p.outline_line_color = 'lightgrey'
+p.grid.grid_line_color = 'slategrey'
+p.border_fill_color = 'black'
+
+p.title.text_color = 'white'
+p.title.align= 'center'
+p.title.text_font_size = '20px'
+p.title.text_font_style = "bold"
+
+p.xaxis.major_label_text_color = 'white'
+p.yaxis.major_label_text_color = 'white'
+p.xaxis.axis_label_text_color = 'white'
+p.yaxis.axis_label_text_color = 'white'
+p.xaxis.axis_line_color = "white"
+p.yaxis.axis_line_color = "white"
+p.xaxis.axis_label_text_font_size = '16px'
+p.yaxis.axis_label_text_font_size = '16px'
+
+
+p.line(
+        x=source.data['date'],
+        y=source.data['closing'],
+        color='cyan',
+        line_width=2,
+        legend_label=ticker
         )
-df=web_mercator(df)
-df['AS_ICP40'].replace('',np.nan, inplace=True)
-df['AS_ICP40'].replace(' ',np.nan, inplace=True)
-df['lat'].replace('',np.nan, inplace=True)
-df['lat'].replace(' ',np.nan, inplace=True)
-#df.dropna(subset=['AS_ICP40'], inplace=True, how='any')
-df.dropna(inplace=True)
-
-USA = x_range,y_range = ((-13884029,-7453304), (2698291,6455972))
-map_bkg_url="http://a.basemaps.cartocdn.com/rastertiles/voyager/{Z}/{X}/{Y}.png"
-map_bkpg_attribution="Tiles by Carto, under CC BY 3.0"
+        #x=source.data['level_0'],
 
 
-st.map(df)
+p.legend.location = 'top_left'
+p.legend.title = 'Ticker'
+p.legend.title_text_font_style = "bold"
+p.legend.title_text_font_size = "20px"
+p.legend.title_text_color = 'white'
+p.legend.label_text_color = 'white'
+p.legend.border_line_width = 3
+p.legend.border_line_color = "white"
+p.legend.border_line_alpha = 0.1
+p.legend.background_fill_color = "white"
+p.legend.background_fill_alpha = 0.05
+
+save(p)
