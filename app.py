@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 import plotly.express as px
 from bokeh.plotting import figure, output_file, show, save, ColumnDataSource
-from bokeh.models import Range1d
+from bokeh.models import Range1d,Legend
 from bokeh.models.tools import HoverTool
 from bokeh.models.formatters import DatetimeTickFormatter
 from bokeh.transform import factor_cmap
@@ -26,17 +26,8 @@ dotenv_config = {
     **dotenv.dotenv_values(".env"),  # load shared development variables
     **os.environ,  # override loaded values with environment variables
 }
-print(dotenv_config)
+#print(dotenv_config)
 key=dotenv_config['ALPHA_VANTAGE_API_KEY']
-
-ticker = 'IBM'
-#ticker = 'SHOP.TRT'
-#options='adjusted=true&'
-options=''
-#function='TIME_SERIES_INTRADAY'
-#function='TIME_SERIES_MONTHLY_ADJUSTED'
-function='TIME_SERIES_DAILY'
-sample_date='2021-12-24'
 
 @st.cache(allow_output_mutation=True)
 def get_data():
@@ -45,6 +36,9 @@ def get_data():
     req = requests.get(url)
     #print(req.json())
     df=pd.read_json(req.content)
+    #df.drop(df.index[range(0,4)],inplace=True) #delete header lines #less lines depending on which time series is used
+    df.drop(df.index[range(0,5)],inplace=True) #delete header lines
+    #deleting the header lines needs to be done in this function or else it will delete points every time you refresh the page without caching new data
     return df
 
 def symbol_search(keyword): #search for available ticker symbols
@@ -52,19 +46,40 @@ def symbol_search(keyword): #search for available ticker symbols
     req = requests.get(url)
     #print(req.json())
     df=pd.read_json(req.content)
+    print(df)
+    df["Symbol"]=df['bestMatches'].map(
+                    lambda x: str(x['1. symbol'])
+                    ) 
+    df["Name"]=df['bestMatches'].map(
+                    lambda x: str(x['2. name'])
+                    ) 
+    df.drop('bestMatches', axis=1, inplace=True)
     return df
 
+#ALPHA VANTAGE options
+ticker = 'IBM' #default
+#options='adjusted=true&'
+options=''
+#function='TIME_SERIES_INTRADAY'
+#function='TIME_SERIES_MONTHLY_ADJUSTED'
+function='TIME_SERIES_DAILY'
+
+
+st.title("tzcrawford dataincubator milestone project")
+
+ticker_keyword=st.text_input("stock ticker symbol search",'IBM')
+symb_df=symbol_search(ticker_keyword)
+st.dataframe(symb_df.head())
+
+ticker=st.text_input("enter stock ticker symbol to generate graph",ticker)
+
 df = get_data()
-#df.drop(df.index[range(0,4)],inplace=True) #delete header lines
-df.drop(df.index[range(0,5)],inplace=True) #delete header lines
 #print(df)
-print(df.index) #to see available dates (one per month)
-#print('------')
+#print(df.index) #to see available dates (one per month)
+#sample_date='2021-12-24'
 #print(df.loc[sample_date][1]) #to see the types of values for each date
 #print(df.loc[sample_date][1]['4. close']) #closing price for one date
-#print('------')
 #print(df['Time Series (Daily)'])
-#print('------')
 df["closing"]=df['Time Series (Daily)'].map(
                     lambda x: str(x['4. close'])
                     ) #the values need to be string not float otherwise bokeh mad about y_range
@@ -76,12 +91,10 @@ df['date']=df.index.map(
 
 #print(df['closing'])
 
-print('------')
 source = ColumnDataSource(df)
 #print(source.data['closing'])
 #print(source.data['date'])
 #print(source.data)
-#print('------')
 
 output_file('index.html')
 
@@ -126,6 +139,8 @@ p.xaxis.axis_line_color = "white"
 p.yaxis.axis_line_color = "white"
 p.xaxis.axis_label_text_font_size = '16px'
 p.yaxis.axis_label_text_font_size = '16px'
+p.xaxis.major_label_orientation = -(3.1415/2)/2
+
 
 
 p.line(
@@ -138,7 +153,11 @@ p.line(
         #x=source.data['level_0'],
 
 
-p.legend.location = 'top_left'
+#p.legend.location = 'top_left'
+legend = Legend(items=[])
+legend.click_policy="mute"
+new_legend = p.legend[0]
+p.add_layout(new_legend, 'right')
 p.legend.title = 'Ticker'
 p.legend.title_text_font_style = "bold"
 p.legend.title_text_font_size = "20px"
@@ -151,7 +170,6 @@ p.legend.background_fill_color = "white"
 p.legend.background_fill_alpha = 0.05
 
 
-st.title("tzcrawford dataincubator milestone project")
 
 ##save(p)
 st.bokeh_chart(p)
