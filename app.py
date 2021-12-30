@@ -69,6 +69,7 @@ st.title("tzcrawford dataincubator milestone project")
 
 ticker_keyword=st.text_input("stock ticker symbol search",'IBM')
 symb_df=symbol_search(ticker_keyword)
+st.markdown("best matches")
 st.dataframe(symb_df.head())
 
 ticker=st.text_input("enter stock ticker symbol to generate graph",ticker)
